@@ -2,12 +2,14 @@ from pydantic import BaseModel, validator
 
 
 class EmbedRequest(BaseModel):
-    text: str
+    texts: list[str]
 
-    @validator("text")
-    def text_must_not_be_empty(cls, value: str) -> str:
-        if not value or not value.strip():
-            raise ValueError("text must not be empty")
+    @validator("texts")
+    def texts_must_not_be_empty(cls, value: list[str]) -> list[str]:
+        if not value or not isinstance(value, list):
+            raise ValueError("texts must be a non-empty list of strings")
+        if any(not item or not item.strip() for item in value):
+            raise ValueError("texts must contain non-empty strings")
         return value
 
 
@@ -29,7 +31,7 @@ class SimilarityRequest(BaseModel):
 
 
 class EmbedResponse(BaseModel):
-    embedding: list[float]
+    embeddings: list[list[float]]
 
 
 class SimilarityResponse(BaseModel):
