@@ -9,12 +9,13 @@ from service import load_model, get_embedding, cosine_similarity
 app = FastAPI(title="Sentence Embeddings API")
 instrumentator = Instrumentator()
 
+instrumentator.instrument(app).expose(app)
+
 
 @app.on_event("startup")
 def startup_event() -> None:
-    """Load the sentence-transformers model and attach Prometheus metrics."""
+    """Load the sentence-transformers model."""
     load_model()
-    instrumentator.instrument(app).expose(app)
 
 
 @app.get("/health")

@@ -4,3 +4,13 @@ __pycache__
 tests/
 *.md
 .env
+.venv
+.pytest_cache
+pip-install.log
+pip-min.log
+pip-tail.txt
+pytest_output.txt
+*.log
+*.txt
+!requirements.txt
+!requirements-dev.txt
