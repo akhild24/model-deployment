@@ -1,0 +1,93 @@
+# ========================
+# Python
+# ========================
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+dist/
+build/
+*.whl
+
+# ========================
+# Terraform
+# ========================
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+*.tfvars
+*.tfvars.json
+!example.tfvars
+
+# ========================
+# Docker
+# ========================
+# (keep Dockerfile & .dockerignore tracked)
+
+# ========================
+# IDE / Editors
+# ========================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.settings/
+
+# ========================
+# OS Generated
+# ========================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ========================
+# Environment & Secrets
+# ========================
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ========================
+# Logs & Temp Files
+# ========================
+*.log
+pip-install.log
+pip-min.log
+pip-tail.txt
+pytest_output.txt
+
+# ========================
+# pytest / coverage
+# ========================
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# ========================
+# Jupyter Notebooks
+# ========================
+.ipynb_checkpoints/
+
+# ========================
+# mypy / type checking
+# ========================
+.mypy_cache/
+.dmypy.json
+dmypy.json
