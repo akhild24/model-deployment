@@ -6,8 +6,9 @@ data "aws_availability_zones" "available" {
 }
 
 locals {
-  name_prefix = "${var.project_name}-${var.environment}"
-  azs         = slice(data.aws_availability_zones.available.names, 0, 2)
+  name_prefix  = "${var.project_name}-${var.environment}"
+  cluster_name = "${var.project_name}-${var.environment}-cluster"
+  azs          = slice(data.aws_availability_zones.available.names, 0, 2)
 }
 
 # VPC with DNS support enabled for EKS service discovery
@@ -35,7 +36,7 @@ resource "aws_subnet" "public" {
   tags = {
     Name                                               = "${local.name_prefix}-public-${local.azs[count.index]}"
     Environment                                        = var.environment
-    "kubernetes.io/cluster/${local.name_prefix}"        = "owned"
+    "kubernetes.io/cluster/${local.cluster_name}"       = "owned"
     "kubernetes.io/role/elb"                            = "1"
   }
 }
@@ -51,7 +52,7 @@ resource "aws_subnet" "private" {
   tags = {
     Name                                               = "${local.name_prefix}-private-${local.azs[count.index]}"
     Environment                                        = var.environment
-    "kubernetes.io/cluster/${local.name_prefix}"        = "owned"
+    "kubernetes.io/cluster/${local.cluster_name}"       = "owned"
     "kubernetes.io/role/internal-elb"                   = "1"
   }
 }

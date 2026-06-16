@@ -11,9 +11,3 @@ variable "environment" {
   description = "Deployment environment"
   type        = string
 }
-
-# OIDC issuer URL from the EKS cluster — used to create the OIDC provider and IRSA trust
-variable "eks_oidc_issuer_url" {
-  description = "OIDC issuer URL from the EKS cluster"
-  type        = string
-}

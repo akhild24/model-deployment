@@ -21,5 +21,5 @@ output "vpc_id" {
 # IAM role ARN for the ALB Ingress Controller
 output "alb_role_arn" {
   description = "IAM role ARN for the AWS Load Balancer Controller"
-  value       = module.iam.alb_controller_role_arn
+  value       = aws_iam_role.alb_controller.arn
 }

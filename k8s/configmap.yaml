@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ml-serving-config
+  namespace: ml-platform
+  labels:
+    app: ml-serving
+data:
+  MODEL_NAME: "all-MiniLM-L6-v2"
+  LOG_LEVEL: "info"
+  WORKERS: "2"
