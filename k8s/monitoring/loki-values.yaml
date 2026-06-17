@@ -1,0 +1,194 @@
+# =============================================================================
+# Loki Stack Helm values — ML Platform Log Aggregation
+# Release name: loki | Namespace: monitoring
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Loki Server — single binary mode (cost-optimized)
+# ---------------------------------------------------------------------------
+loki:
+  enabled: true
+
+  # Single binary deployment — no microservices overhead
+  deploymentMode: SingleBinary
+
+  # Minimal resource allocation
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 100m
+    limits:
+      memory: 512Mi
+      cpu: 250m
+
+  # Disable persistence — ephemeral storage for cost saving
+  persistence:
+    enabled: false
+
+  # Loki configuration
+  config:
+    auth_enabled: false
+
+    server:
+      http_listen_port: 3100
+
+    common:
+      path_prefix: /tmp/loki
+      replication_factor: 1
+
+    schema_config:
+      configs:
+        - from: "2024-01-01"
+          store: tsdb
+          object_store: filesystem
+          schema: v13
+          index:
+            prefix: index_
+            period: 24h
+
+    storage_config:
+      filesystem:
+        directory: /tmp/loki/chunks
+
+    limits_config:
+      # Retention: keep logs for 7 days
+      retention_period: 168h
+      reject_old_samples: true
+      reject_old_samples_max_age: 168h
+      max_query_series: 500
+      max_query_parallelism: 2
+
+    compactor:
+      working_directory: /tmp/loki/compactor
+      retention_enabled: true
+
+  # Run as single replica
+  replicas: 1
+
+  # Disable unnecessary components for single binary mode
+  backend:
+    replicas: 0
+  read:
+    replicas: 0
+  write:
+    replicas: 0
+
+  singleBinary:
+    replicas: 1
+    resources:
+      requests:
+        memory: 256Mi
+        cpu: 100m
+      limits:
+        memory: 512Mi
+        cpu: 250m
+
+  # Disable self-monitoring to save resources
+  monitoring:
+    selfMonitoring:
+      enabled: false
+      grafanaAgent:
+        installOperator: false
+    lokiCanary:
+      enabled: false
+
+  # Disable gateway
+  gateway:
+    enabled: false
+
+  # Disable test
+  test:
+    enabled: false
+
+# ---------------------------------------------------------------------------
+# Promtail — log collection agent
+# ---------------------------------------------------------------------------
+promtail:
+  enabled: true
+
+  resources:
+    requests:
+      memory: 64Mi
+      cpu: 50m
+    limits:
+      memory: 128Mi
+      cpu: 100m
+
+  config:
+    clients:
+      - url: http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push
+
+    scrape_configs:
+      # Scrape all pod logs but enrich with labels
+      - job_name: kubernetes-pods
+        pipeline_stages:
+          - cri: {}
+          - labeldrop:
+              - filename
+              - stream
+        kubernetes_sd_configs:
+          - role: pod
+        relabel_configs:
+          # Only scrape pods in the ml-platform namespace
+          - source_labels: [__meta_kubernetes_namespace]
+            action: keep
+            regex: ml-platform
+
+          # Set labels from pod metadata
+          - source_labels: [__meta_kubernetes_namespace]
+            action: replace
+            target_label: namespace
+
+          - source_labels: [__meta_kubernetes_pod_name]
+            action: replace
+            target_label: pod
+
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            action: replace
+            target_label: app
+
+          - source_labels: [__meta_kubernetes_pod_container_name]
+            action: replace
+            target_label: container
+
+          # Use the pod log path
+          - replacement: /var/log/pods/*$1/*.log
+            separator: /
+            source_labels:
+              - __meta_kubernetes_pod_uid
+              - __meta_kubernetes_pod_container_name
+            target_label: __path__
+
+      # Also scrape kube-system for ALB controller and system logs
+      - job_name: kube-system-pods
+        pipeline_stages:
+          - cri: {}
+        kubernetes_sd_configs:
+          - role: pod
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_namespace]
+            action: keep
+            regex: kube-system
+
+          - source_labels: [__meta_kubernetes_namespace]
+            action: replace
+            target_label: namespace
+
+          - source_labels: [__meta_kubernetes_pod_name]
+            action: replace
+            target_label: pod
+
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            action: replace
+            target_label: app
+
+          - source_labels: [__meta_kubernetes_pod_container_name]
+            action: replace
+            target_label: container
+
+          - replacement: /var/log/pods/*$1/*.log
+            separator: /
+            source_labels:
+              - __meta_kubernetes_pod_uid
+              - __meta_kubernetes_pod_container_name
+            target_label: __path__

@@ -1,0 +1,380 @@
+# =============================================================================
+# Grafana Dashboard ConfigMap — ML Platform Observability
+# Auto-provisioned via Grafana sidecar (label: grafana_dashboard=1)
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ml-serving-grafana-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+  annotations:
+    grafana_folder: "ML Platform"
+data:
+  ml-serving-dashboard.json: |
+    {
+      "annotations": {
+        "list": [
+          {
+            "builtIn": 1,
+            "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+            "enable": true,
+            "hide": true,
+            "iconColor": "rgba(0, 211, 255, 1)",
+            "name": "Annotations & Alerts",
+            "type": "dashboard"
+          }
+        ]
+      },
+      "description": "ML Platform — Inference, HTTP, and Infrastructure Metrics",
+      "editable": true,
+      "fiscalYearStartMonth": 0,
+      "graphTooltip": 1,
+      "id": null,
+      "links": [],
+      "panels": [
+        {
+          "title": "📊 Request Rate",
+          "description": "HTTP requests per second across all ml-serving pods",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 15,
+                "pointSize": 5,
+                "spanNulls": false,
+                "lineInterpolation": "smooth",
+                "gradientMode": "scheme"
+              },
+              "unit": "reqps"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] },
+            "tooltip": { "mode": "multi" }
+          },
+          "targets": [
+            {
+              "expr": "sum(rate(http_requests_total{namespace=\"ml-platform\"}[1m])) by (handler)",
+              "legendFormat": "{{ handler }}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "title": "⚡ Inference Latency (P50 / P95 / P99)",
+          "description": "Embedding inference latency percentiles from custom histogram",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "pointSize": 5,
+                "spanNulls": false,
+                "lineInterpolation": "smooth",
+                "gradientMode": "scheme"
+              },
+              "unit": "s"
+            },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "P95" },
+                "properties": [
+                  { "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }
+                ]
+              },
+              {
+                "matcher": { "id": "byName", "options": "P99" },
+                "properties": [
+                  { "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max", "lastNotNull"] },
+            "tooltip": { "mode": "multi" }
+          },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.50, sum(rate(embedding_inference_latency_seconds_bucket{namespace=\"ml-platform\"}[5m])) by (le))",
+              "legendFormat": "P50",
+              "refId": "A"
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum(rate(embedding_inference_latency_seconds_bucket{namespace=\"ml-platform\"}[5m])) by (le))",
+              "legendFormat": "P95",
+              "refId": "B"
+            },
+            {
+              "expr": "histogram_quantile(0.99, sum(rate(embedding_inference_latency_seconds_bucket{namespace=\"ml-platform\"}[5m])) by (le))",
+              "legendFormat": "P99",
+              "refId": "C"
+            }
+          ]
+        },
+        {
+          "title": "🚨 Error Rate (5xx %)",
+          "description": "Percentage of HTTP 5xx responses over total requests",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "fixedColor": "red", "mode": "fixed" },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 20,
+                "pointSize": 5,
+                "spanNulls": false,
+                "lineInterpolation": "smooth",
+                "gradientMode": "scheme",
+                "thresholdsStyle": { "mode": "line+area" }
+              },
+              "unit": "percent",
+              "min": 0,
+              "max": 100,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 2 },
+                  { "color": "red", "value": 5 }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] },
+            "tooltip": { "mode": "multi" }
+          },
+          "targets": [
+            {
+              "expr": "(\n  sum(rate(http_requests_total{namespace=\"ml-platform\", status=~\"5..\"}[5m]))\n  /\n  sum(rate(http_requests_total{namespace=\"ml-platform\"}[5m]))\n) * 100",
+              "legendFormat": "5xx Error Rate",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "title": "🟢 Active Pods",
+          "description": "Number of available vs desired replicas for ml-serving deployment",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 6, "x": 12, "y": 8 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "red", "value": null },
+                  { "color": "yellow", "value": 1 },
+                  { "color": "green", "value": 2 }
+                ]
+              },
+              "unit": "none"
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "background",
+            "graphMode": "area",
+            "textMode": "value_and_name",
+            "reduceOptions": { "calcs": ["lastNotNull"] }
+          },
+          "targets": [
+            {
+              "expr": "kube_deployment_status_replicas_available{namespace=\"ml-platform\", deployment=\"ml-serving\"}",
+              "legendFormat": "Available",
+              "refId": "A"
+            },
+            {
+              "expr": "kube_deployment_spec_replicas{namespace=\"ml-platform\", deployment=\"ml-serving\"}",
+              "legendFormat": "Desired",
+              "refId": "B"
+            }
+          ]
+        },
+        {
+          "title": "📈 Inference Throughput",
+          "description": "Total embeddings generated per second",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 6, "x": 18, "y": 8 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "blue", "value": null },
+                  { "color": "green", "value": 1 }
+                ]
+              },
+              "unit": "ops"
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "background",
+            "graphMode": "area",
+            "reduceOptions": { "calcs": ["lastNotNull"] }
+          },
+          "targets": [
+            {
+              "expr": "sum(rate(embedding_inference_latency_seconds_count{namespace=\"ml-platform\"}[5m]))",
+              "legendFormat": "Inferences/sec",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "title": "🖥️ CPU Usage per Pod",
+          "description": "CPU core usage for each ml-serving pod",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 15,
+                "pointSize": 5,
+                "spanNulls": false,
+                "lineInterpolation": "smooth",
+                "gradientMode": "scheme"
+              },
+              "unit": "cores",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 0.4 },
+                  { "color": "red", "value": 0.5 }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] },
+            "tooltip": { "mode": "multi" }
+          },
+          "targets": [
+            {
+              "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"ml-platform\", container=\"ml-serving\"}[5m])) by (pod)",
+              "legendFormat": "{{ pod }}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "title": "🧠 Memory Usage per Pod",
+          "description": "Working set memory for each ml-serving pod",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 15,
+                "pointSize": 5,
+                "spanNulls": false,
+                "lineInterpolation": "smooth",
+                "gradientMode": "scheme"
+              },
+              "unit": "bytes",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 858993459 },
+                  { "color": "red", "value": 1073741824 }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] },
+            "tooltip": { "mode": "multi" }
+          },
+          "targets": [
+            {
+              "expr": "sum(container_memory_working_set_bytes{namespace=\"ml-platform\", container=\"ml-serving\"}) by (pod)",
+              "legendFormat": "{{ pod }}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "title": "📋 HTTP Request Duration (P50 / P95)",
+          "description": "Overall HTTP request duration from prometheus_fastapi_instrumentator",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "pointSize": 5,
+                "spanNulls": false,
+                "lineInterpolation": "smooth",
+                "gradientMode": "scheme"
+              },
+              "unit": "s"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] },
+            "tooltip": { "mode": "multi" }
+          },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket{namespace=\"ml-platform\"}[5m])) by (le, handler))",
+              "legendFormat": "P50 — {{ handler }}",
+              "refId": "A"
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{namespace=\"ml-platform\"}[5m])) by (le, handler))",
+              "legendFormat": "P95 — {{ handler }}",
+              "refId": "B"
+            }
+          ]
+        }
+      ],
+      "refresh": "10s",
+      "schemaVersion": 39,
+      "tags": ["ml-platform", "inference", "fastapi"],
+      "templating": { "list": [] },
+      "time": { "from": "now-1h", "to": "now" },
+      "timepicker": {},
+      "timezone": "browser",
+      "title": "ML Platform — Inference & Infrastructure",
+      "uid": "ml-platform-overview",
+      "version": 1
+    }

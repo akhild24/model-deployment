@@ -1,0 +1,223 @@
+# =============================================================================
+# kube-prometheus-stack Helm values — ML Platform Observability
+# Release name: prometheus | Namespace: monitoring
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Prometheus Server
+# ---------------------------------------------------------------------------
+prometheus:
+  prometheusSpec:
+    # Retain metrics for 7 days (cost-optimized, no long-term storage)
+    retention: 7d
+
+    # No persistent volume — ephemeral storage to save costs
+    storageSpec: {}
+
+    # Resource limits for the Prometheus server
+    resources:
+      requests:
+        memory: 512Mi
+        cpu: 250m
+      limits:
+        memory: 1Gi
+        cpu: 500m
+
+    # Scrape pods across all namespaces that have ServiceMonitors
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+
+    # Additional scrape configs for annotation-based pod discovery
+    # This picks up any pod with prometheus.io/scrape: "true" annotations
+    additionalScrapeConfigs:
+      - job_name: "ml-serving-pods"
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - ml-platform
+        relabel_configs:
+          # Only scrape pods with prometheus.io/scrape annotation
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: "true"
+          # Use the prometheus.io/path annotation or default to /metrics
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: (.+)
+          # Use the prometheus.io/port annotation for the scrape port
+          - source_labels:
+              [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+            action: replace
+            regex: ([^:]+)(?::\d+)?;(\d+)
+            replacement: $1:$2
+            target_label: __address__
+          # Propagate useful labels
+          - source_labels: [__meta_kubernetes_namespace]
+            action: replace
+            target_label: namespace
+          - source_labels: [__meta_kubernetes_pod_name]
+            action: replace
+            target_label: pod
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            action: replace
+            target_label: app
+
+# ---------------------------------------------------------------------------
+# Alertmanager
+# ---------------------------------------------------------------------------
+alertmanager:
+  enabled: true
+
+  alertmanagerSpec:
+    resources:
+      requests:
+        memory: 128Mi
+        cpu: 50m
+      limits:
+        memory: 256Mi
+        cpu: 100m
+    storage: {}
+
+  # Default alertmanager config — sends to a null receiver (swap for Slack/PagerDuty/email later)
+  config:
+    global:
+      resolve_timeout: 5m
+    route:
+      group_by: ["alertname", "namespace"]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+      receiver: "null"
+      routes:
+        - match:
+            severity: critical
+          receiver: "null"
+    receivers:
+      - name: "null"
+
+# ---------------------------------------------------------------------------
+# Custom PrometheusRule — ML-specific alerts
+# ---------------------------------------------------------------------------
+additionalPrometheusRulesMap:
+  ml-serving-alerts:
+    groups:
+      - name: ml-serving.rules
+        rules:
+          # ALERT: P95 inference latency exceeds 2 seconds for 5 minutes
+          - alert: HighInferenceLatency
+            expr: |
+              histogram_quantile(0.95,
+                sum(rate(embedding_inference_latency_seconds_bucket{namespace="ml-platform"}[5m])) by (le, pod)
+              ) > 2
+            for: 5m
+            labels:
+              severity: warning
+              team: ml-platform
+            annotations:
+              summary: "High P95 inference latency on {{ $labels.pod }}"
+              description: >-
+                P95 inference latency is {{ $value | printf "%.2f" }}s
+                (threshold: 2s) on pod {{ $labels.pod }} for the last 5 minutes.
+
+          # ALERT: HTTP 5xx error rate exceeds 5% for 5 minutes
+          - alert: HighErrorRate
+            expr: |
+              (
+                sum(rate(http_requests_total{namespace="ml-platform", status=~"5.."}[5m]))
+                /
+                sum(rate(http_requests_total{namespace="ml-platform"}[5m]))
+              ) * 100 > 5
+            for: 5m
+            labels:
+              severity: critical
+              team: ml-platform
+            annotations:
+              summary: "High HTTP 5xx error rate in ml-platform"
+              description: >-
+                5xx error rate is {{ $value | printf "%.1f" }}%
+                (threshold: 5%) for the last 5 minutes.
+
+          # ALERT: ML-serving pod not running for 2 minutes
+          - alert: PodDown
+            expr: |
+              kube_deployment_status_replicas_available{namespace="ml-platform", deployment="ml-serving"}
+              <
+              kube_deployment_spec_replicas{namespace="ml-platform", deployment="ml-serving"}
+            for: 2m
+            labels:
+              severity: critical
+              team: ml-platform
+            annotations:
+              summary: "ml-serving pod(s) not available"
+              description: >-
+                Available replicas ({{ $value }}) is less than desired replicas
+                for deployment ml-serving in ml-platform namespace.
+
+# ---------------------------------------------------------------------------
+# Grafana (bundled with kube-prometheus-stack)
+# ---------------------------------------------------------------------------
+grafana:
+  enabled: true
+  adminPassword: admin123
+
+  # Resource limits
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 100m
+    limits:
+      memory: 512Mi
+      cpu: 250m
+
+  persistence:
+    enabled: false
+
+  # Auto-provision Loki as a datasource in Grafana
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      access: proxy
+      url: http://loki.monitoring.svc.cluster.local:3100
+      jsonData:
+        maxLines: 1000
+
+  # Load dashboards from ConfigMaps with the grafana_dashboard=1 label
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+      searchNamespace: monitoring
+      folderAnnotation: grafana_folder
+      provider:
+        foldersFromFilesStructure: false
+    datasources:
+      enabled: true
+
+  # Grafana service type
+  service:
+    type: ClusterIP
+    port: 80
+
+# ---------------------------------------------------------------------------
+# Disable components we don't need (cost saving)
+# ---------------------------------------------------------------------------
+kubeEtcd:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+kubeProxy:
+  enabled: false
+
+# Node exporter — keep for CPU/memory metrics
+nodeExporter:
+  enabled: true
+
+# kube-state-metrics — keep for pod/deployment status metrics
+kubeStateMetrics:
+  enabled: true
