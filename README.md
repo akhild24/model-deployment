@@ -83,7 +83,7 @@ EKS Cluster (us-east-1) — 2× t3.medium Spot nodes
 ### ✅ Phase 5 — Jenkins CI/CD
 - Jenkins on EC2 (Amazon Corretto Java 21)
 - Pipeline stages: Checkout → Build Docker → Push ECR → `kubectl set image` → Rollout status
-- Jenkins IAM role mapped to `system:masters` in EKS `aws-auth` ConfigMap
+- Jenkins IAM role mapped to `system:main` in EKS `aws-auth` ConfigMap
 
 ### ✅ Phase 6 — Observability Stack
 - Prometheus scrapes pods annotated with `prometheus.io/scrape: "true"` in the `ml-platform` namespace
